@@ -4,6 +4,7 @@ import torchvision.transforms as T
 from torchvision.utils import save_image
 from neurpy.model.pretrained import load
 
+
 def config_prompt(prompt, seed=None, step=False, max_chars=255):
     conf = dict(id=str(uuid.uuid4())[:8], prompt=prompt, seed=seed,
     formatter='{prompt}.{seed}.{id}.{step}.png', tokens=[])
@@ -19,46 +20,43 @@ def config_prompt(prompt, seed=None, step=False, max_chars=255):
     seeded = f'{filtered}.{str(seed).zfill(6)}.{conf["id"]}'
     conf['filtered'], conf['seeded'] = filtered, seeded
     conf['image'] =  f'{conf["seeded"]}.png'
-    if step: conf['step'] = f'{seeded}' + '.{}.png'
+    if step:
+        conf['step'] = f'{seeded}' + '.{}.png'
     #---------------------------------------------------------------------------
-    files = dict(video='.mp4', depth='-depth.png', swirl='-swirl.png', zoom='-zoom.png', latent='.pt')
+    files = dict(video='.mp4',
+                 depth='-depth.png',
+                 swirl='-swirl.png',
+                 zoom='-zoom.png',
+                 latent='.pt')
     #---------------------------------------------------------------------------
-    return dict(**conf, **dict(zip(files.keys(), map(lambda ext:f'{seeded}{ext}', files.values()))))
+    extension = map(lambda ext:f'{seeded}{ext}', files.values())
+    return dict(**conf, **dict(zip(files.keys(), extension)))
 
 
 class T2I(th.nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
 
-    def generate_image(self,):
-        raise NotImplementedError
-
-    def encode_image(self, image=None, image_w=None, image_h=None):
-        raise NotImplementedError
-
-    def decode_image(self, z):
-        raise NotImplementedError
-
-    def encode_text(self, raw):
-        raise NotImplementedError
-
     def init_z(self, **kwargs):
-        '''
-        '''
         raise NotImplementedError
 
+    def get_z(self):
+        return self.z
 
+    def set_z(self, z):
+        self.z = z
+
+    def get_lr(self):
+        return [g['lr'] for g in self.optim.param_groups][0]
+
+    #---------------------------------------------------------------------------
     def _generator(self, generator, device='cuda', **kwargs):
         G = load(generator, **kwargs)[0]
         G.eval().requires_grad_(False)
         self.G = G.to(device)
         return dict(G=self.G)
 
-
-    #---------------------------------------------------------------------------
     def _perceptor(self, device='cuda', **kwargs):
-        '''
-        '''
         for perceptor,weight in zip(kwargs['perceptor'], kwargs['p_weights']):
             if not perceptor in self.P.keys():
                 model, normalize, tokenize = load(perceptor)
@@ -70,7 +68,7 @@ class T2I(th.nn.Module):
                 tokenize=tokenize, prompts=[])
             self.P[perceptor]['weight'] = weight
             self.P[perceptor]['prompts'] = []
-
+    #---------------------------------------------------------------------------
 
     def optimizer(self, z, lr, weight_decay=0., ema_decay=None, optimizer='Adam'):
         self.z = z
@@ -81,27 +79,26 @@ class T2I(th.nn.Module):
         self.optim = Opt([self.z], lr=lr, weight_decay=weight_decay)
 
 
-    def get_lr(self):
-        return [g['lr'] for g in self.optim.param_groups][0]
+    def generate(self, z):
+        raise NotImplementedError
 
 
     def forward(self, *args, **kwargs):
-        image = self.generate_image(self.get_z())
+        image = self.generate(self.get_z())
         return dict(image=image, loss=0.)
 
 
-    def training_step(self, batch=None, batch_nb=None, save_every=10, *args, **kwargs):
-        cutn_batches=1
-        gradient_accumulate=1
+    def training_step(self, cutn_batches=1, gradient_accumulate=1,  *args, **kwargs):
         total_loss=0.
         for cutn_batch in range(cutn_batches):
             self.optim.zero_grad(set_to_none=True)
             for grad_step in range(gradient_accumulate):
-                outputs = self.generate()
+                outputs = self.forward(*args, **kwargs)
                 loss = sum(outputs['losses']) / gradient_accumulate
                 total_loss += loss.item()
                 loss.backward()
             self.optim.step()
+        total_loss /= (cutn_batch * gradient_accumulate)
         return dict(**outputs, loss=loss.item(), total_loss=total_loss)
 
 
@@ -113,9 +110,9 @@ class T2I(th.nn.Module):
         prompt = prompt_config['prompt']
         prompts = prompt.split('||')
         epochs = len(prompts)
-
         updates = (epochs * steps) // save_every
         banner = 'loss: {:04.2f}, lr: {:.5f}'
+
         bar = tqdm.tqdm(total=updates, desc='image update', position=2, leave=True)
         for epoch in tqdm.trange(epochs, desc = '      epochs', position=0, leave=True):
             itrs = tqdm.trange(steps, desc='   iteration', position=1, leave=True)
@@ -125,7 +122,7 @@ class T2I(th.nn.Module):
 
             for step in itrs:
                 batch_nb = ((1 + epoch) * step)
-                outputs = self.training_step(**kwargs)
+                outputs = self.training_step(prompt=prompts[epoch], **kwargs)
 
                 if batch_nb and batch_nb % save_every == 0:
                     bar.update(1)
