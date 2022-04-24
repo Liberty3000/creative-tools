@@ -49,6 +49,9 @@ class T2I(th.nn.Module):
     def get_lr(self):
         return [g['lr'] for g in self.optim.param_groups][0]
 
+    def set_lr(self, lr):
+        for g in self.optim.params:
+            g['lr'] = lr
     #---------------------------------------------------------------------------
     def _generator(self, generator, device='cuda', **kwargs):
         G = load(generator, **kwargs)[0]
@@ -70,7 +73,7 @@ class T2I(th.nn.Module):
             self.P[perceptor]['prompts'] = []
     #---------------------------------------------------------------------------
 
-    def optimizer(self, z, lr, weight_decay=0., ema_decay=None, optimizer='Adam'):
+    def optimizer(self, z, lr, weight_decay=0., ema_decay=None, optimizer='Adam', **kwargs):
         self.z = z
         self.z_init = self.z.clone()
         self.z.requires_grad_(True)
@@ -88,13 +91,13 @@ class T2I(th.nn.Module):
         return dict(image=image, loss=0.)
 
 
-    def training_step(self, cutn_batches=1, gradient_accumulate=1,  *args, **kwargs):
+    def training_step(self, cutn_batches=1, grad_accumulate=1,  *args, **kwargs):
         total_loss=0.
         for cutn_batch in range(cutn_batches):
             self.optim.zero_grad(set_to_none=True)
-            for grad_step in range(gradient_accumulate):
+            for grad_step in range(grad_accumulate):
                 outputs = self.forward(*args, **kwargs)
-                loss = sum(outputs['losses']) / gradient_accumulate
+                loss = sum(outputs['losses']) / grad_accumulate
                 total_loss += loss.item()
                 loss.backward()
             self.optim.step()
@@ -122,7 +125,7 @@ class T2I(th.nn.Module):
 
             for step in itrs:
                 batch_nb = ((1 + epoch) * step)
-                outputs = self.training_step(prompt=prompts[epoch], **kwargs)
+                outputs = self.training_step(prompt=prompts[epoch], batch_nb=batch_nb, **kwargs)
 
                 if batch_nb and batch_nb % save_every == 0:
                     bar.update(1)
@@ -134,7 +137,10 @@ class T2I(th.nn.Module):
                     output_files.append(output_file)
 
                     with th.no_grad():
-                        save_image(outputs['image'].detach().cpu(), output_file)
+                        if not 'animated' in outputs.keys():
+                            save_image(outputs['image'], output_file)
+                        else:
+                            save_image(outputs['animated'], output_file)
 
                 if scheduler is not None: scheduler.step()
 

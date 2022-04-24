@@ -1,4 +1,5 @@
-import tqdm
+import os, tqdm
+import numpy as np
 from PIL import Image
 import torch as th, torch.nn.functional as F
 import torchvision as tv, torchvision.transforms as T
@@ -50,8 +51,7 @@ class VQLIPSE(T2I):
         self.G, self.P = None, dict()
 
     def _generator(self, generator, image_w, image_h, device='cuda', *args, **kwargs):
-        '''
-        '''
+
         from taming.models.vqgan import GumbelVQ
 
         self.G = load(generator, image_size=(image_w, image_h))[0]
@@ -71,8 +71,7 @@ class VQLIPSE(T2I):
 
 
     def generate(self, z, device='cuda'):
-        '''
-        '''
+
         from taming.models.vqgan import GumbelVQ
 
         if isinstance(self.G, GumbelVQ): weight = self.G.quantize.embed.weight
@@ -82,16 +81,14 @@ class VQLIPSE(T2I):
         return output
 
 
-    def init_z(self, image=None, image_w=None, image_h=None, device='cuda', verbose=False, **kwargs):
-        '''
-        '''
+    def init_z(self, init=None, image_w=None, image_h=None, device='cuda', verbose=False, **kwargs):
 
         self.toks_x, self.toks_y = image_w // self.f, image_h // self.f
         self.side_x, self.side_y = self.toks_x * self.f, self.toks_y * self.f
         ydim, xdim = self.toks_y * self.f, self.toks_x * self.f
 
-        if image is not None:
-            pil_image = Image.open(image).convert('RGB')
+        if init is not None and os.path.isfile(init):
+            pil_image = Image.open(init).convert('RGB')
 
             pil_image = pil_image.resize((self.side_x, self.side_y), Image.LANCZOS)
             input_ = tv.transforms.functional.to_tensor(pil_image).to(device)
@@ -99,19 +96,19 @@ class VQLIPSE(T2I):
             z, *_ = self.G.encode(input_)
 
             if verbose: print(f'init :: {z.shape} :: image :: {image}')
-        elif 'perlin' in kwargs.keys() and kwargs['perlin'] is not None:
-            perlin_weight, perlin_octaves = kwargs['perlin']['weight'], kwargs['perlin']['octaves']
+        elif init == 'perlin':
+            perlin_weight, perlin_octaves = kwargs['weight'], kwargs['octaves']
             rand_init = random_perlin((ydim, xdim), perlin_weight, perlin_octaves)
 
             z, *_ = self.G.encode(rand_init.to(device) * 2 - 1)
-            if verbose: print(f'init :: {z.shape} :: perlin :: {kwargs["perlin"]}')
-        elif 'pyramid' in kwargs.keys() and kwargs['pyramid'] is not None:
-            pyramid_decay, pyramid_octaves = kwargs['pyramid']['decay'], kwargs['pyramid']['octaves']
+            if verbose: print(f'init :: {z.shape} :: perlin')
+        elif init == 'pyramid':
+            pyramid_decay, pyramid_octaves = kwargs['decay'], kwargs['octaves']
             rand_init = random_pyramid((1, 3, ydim, xdim), pyramid_octaves, pyramid_decay)
             rand_init = (rand_init * 0.5 + 0.5).clip(0, 1)
 
             z, *_ = self.G.encode(rand_init.to(device) * 2 - 1)
-            if verbose: print(f'init :: {z.shape} :: pyramid :: {kwargs["pyramid"]}')
+            if verbose: print(f'init :: {z.shape} :: pyramid')
         else:
             from taming.models.vqgan import GumbelVQ
             rand_int = th.randint(self.n_tok, [self.toks_y * self.toks_x], device=device)
@@ -138,6 +135,7 @@ class VQLIPSE(T2I):
                 prompt_ = Prompt(emb, weight=weight, stop=stop)
                 self.P[p]['prompts'].append(prompt_)
 
+
     def forward(self, **kwargs):
         output, losses = self.generate(self.z), []
         #-----------------------------------------------------------------------
@@ -156,7 +154,7 @@ class VQLIPSE(T2I):
                 losses.append(prompt(encoding))
                 p_losses[f'{k}-prompts[{i}]'] = losses[-1]
         #-----------------------------------------------------------------------
-        tv_loss, init_loss = 0.,0.
+        tv_loss, ssim_loss, init_loss = 0.,0.,0.
         if 'tv_loss' in kwargs.keys() and kwargs['tv_loss']:
             tv_loss = kwargs['tv_loss'] * total_variation_loss(output)
             losses.append(tv_loss)
@@ -165,7 +163,7 @@ class VQLIPSE(T2I):
             targ = self.generate(self.init_z(kwargs['image']))
             pred = self.generate(self.get_z())
             ssim_loss = SSIM()(pred, targ)
-            result.append(self.ssim_loss * ssim_loss)
+            losses.append(kwargs['ssim_loss'] * ssim_loss)
 
         if 'init_weight' in kwargs.keys() and kwargs['init_weight']:
             init_loss = F.mse_loss(self.z, self.z_init) * kwargs['init_weight'] / 2
@@ -174,11 +172,10 @@ class VQLIPSE(T2I):
         return dict(image=output, losses=losses, prompt_losses=p_losses)
 
 
-    def training_step(self, batch=None, batch_nb=None, save_every=10, *args, **kwargs):
-        gradient_accumulate = 1
+    def training_step(self, cutn_batches=1, gradient_accumulate=1, *args, **kwargs):
         total_loss = 0.
         #-----------------------------------------------------------------------
-        for cutn_batch in range(1):
+        for cutn_batch in range(cutn_batches):
             for _ in range(gradient_accumulate):
                 outputs = self.forward(*args, **kwargs)
                 loss = sum(outputs['losses']) / gradient_accumulate
@@ -191,6 +188,21 @@ class VQLIPSE(T2I):
             self.optim.zero_grad(set_to_none=True)
         #-----------------------------------------------------------------------
         image = outputs['image'].detach().cpu()
-        if kwargs['zoom'] or kwargs['swirl'] or kwargs['depth']:
-            image = self.animate(image, **kwargs)
-        return dict(image=image, loss=loss.item())
+        output_dict = dict(image=image, loss=loss.item())
+        #-----------------------------------------------------------------------
+        if kwargs['zoom_2d'] and kwargs['zoom_step'] and kwargs['batch_nb'] > \
+           kwargs['zoom_init'] and kwargs['batch_nb'] % kwargs['zoom_step'] == 0:
+            import scipy.ndimage as nd
+
+            zoom_transform = ([1 - kwargs['zoom_rate'], 1 - kwargs['zoom_rate'], 1],
+                              [kwargs['image_h'] * kwargs['zoom_rate'] / 2,
+                               kwargs['image_w'] * kwargs['zoom_rate'] / 2, 0])
+
+            image = np.asarray(T.ToPILImage()(image.squeeze()).convert('RGB'))
+            zoomed = nd.affine_transform(image, *zoom_transform, order=1)
+            output = T.ToPILImage()(zoomed)
+            output.save('zoom.png')
+            self.optimizer(self.init_z(init='zoom.png', **kwargs), **kwargs)
+            output_dict['animated'] = T.ToTensor()(zoomed)
+        #-----------------------------------------------------------------------
+        return output_dict
