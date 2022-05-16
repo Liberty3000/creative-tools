@@ -129,9 +129,18 @@ class VQLIPSE(T2I):
             vals = vals + ['', '1', '-inf'][len(vals):]
             text, weight, stop = vals[0], float(vals[1]), float(vals[2])
             for p,p_dict in self.P.items():
-                perceptor, weight = p_dict['perceptor'], p_dict['weight']
-                toks = p_dict['tokenize'](text).to(device)
-                emb = perceptor.encode_text(toks).float()
+                perceptor = p_dict['perceptor']
+                patch_size = p_dict['patch_size']
+                normalize, tokenize = p_dict['normalize'], p_dict['tokenize']
+
+                if os.path.exists(text):
+                    image_tensor = Image.open(text).resize(2 * (patch_size,))
+                    img = T.ToTensor()(image_tensor.convert('RGB')).unsqueeze(0)
+                    emb = perceptor.encode_image(normalize(img).to(device)).float()
+                else:
+                    tok = tokenize(text).to(device)
+                    emb = perceptor.encode_text(tok).float()
+
                 prompt_ = Prompt(emb, weight=weight, stop=stop)
                 self.P[p]['prompts'].append(prompt_)
 
@@ -148,6 +157,9 @@ class VQLIPSE(T2I):
         #-----------------------------------------------------------------------
         p_losses = dict()
         for k,v in self.P.items():
+            if v['patch_size'] != cutouts.size(-1):
+                cutouts = F.interpolate(cutouts, 2 * (v['patch_size'],))
+
             perceptor, inputs = v['perceptor'], v['normalize'](cutouts)
             encoding = perceptor.encode_image(inputs).float()
             for i,prompt in enumerate(v['prompts']):
@@ -204,5 +216,17 @@ class VQLIPSE(T2I):
             output.save('zoom.png')
             self.optimizer(self.init_z(init='zoom.png', **kwargs), **kwargs)
             output_dict['animated'] = T.ToTensor()(zoomed)
+        elif kwargs['zoom_3d'] and kwargs['zoom_step'] and kwargs['batch_nb'] > \
+           kwargs['zoom_init'] and kwargs['batch_nb'] % kwargs['zoom_step'] == 0:
+            from t2i.animate import zoom_3d, parametric_eval
+            translation = (kwargs['translate_x'], kwargs['translate_y'], kwargs['translate_z'])
+            t = kwargs['zoom_init']-kwargs['batch_nb']/(kwargs['zoom_step']*kwargs['fps'])
+            input = T.ToPILImage()(image.squeeze())
+            pil_image = zoom_3d(input, translate=translation, t=t,
+                                rotate=kwargs['rotate_3d'], **kwargs)
+            pil_image.save('zoom.png')
+            self.optimizer(self.init_z(init='zoom.png', **kwargs), **kwargs)
+            output_dict['animated'] = T.ToTensor()(pil_image)
+
         #-----------------------------------------------------------------------
         return output_dict

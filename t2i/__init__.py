@@ -9,7 +9,8 @@ def config_prompt(prompt, seed=None, step=False, max_chars=255):
     conf = dict(id=str(uuid.uuid4())[:8], prompt=prompt, seed=seed,
     formatter='{prompt}.{seed}.{id}.{step}.png', tokens=[])
     #---------------------------------------------------------------------------
-    if len(prompt.split('||')) > 1:
+    prompts = prompt.split('||')
+    if len(prompts) > 1:
         prompt = '{}...{}'.format(prompts[0][:32], prompts[-1][-32:])
     #---------------------------------------------------------------------------
     filtered = prompt.rstrip()
