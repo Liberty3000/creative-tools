@@ -88,7 +88,7 @@ class ruDALLE(T2I):
                     #-----------------------------------------------------------
                     images,codebooks = self.vae_decode(output)
                     for j,image in enumerate(images):
-                        output_file = f'{prompt_config["seeded"]}.{(i+ 1) * (j + 1)}.png'
+                        output_file = f'{prompt_config["seeded"]}.{len(output_files) + 1}.png'
                         save_image(image, output_file)
                         output_files.append(output_file)
 

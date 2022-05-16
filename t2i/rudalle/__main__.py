@@ -1,7 +1,8 @@
 import click, gc, os, random, pprint, yaml
 import neptune.new as neptune
+from neptune.new.types import File
 import torch as th
-from t2i import config_prompt
+from t2i import config_prompt, isr
 from t2i.rudalle import ruDALLE as T2I
 from t2i.util import enforce_reproducibility
 
@@ -35,6 +36,7 @@ from t2i.util import enforce_reproducibility
 @click.option(       '--save_every', default=10)
 @click.option(    '--save_progress', default=False,  is_flag=True)
 @click.option(          '--preview', default=False,  is_flag=True)
+@click.option(            '--isr', default=None, type=click.Choice([None,2,4,8]))
 # video compilation
 @click.option(            '--video', default=False,  is_flag=True)
 @click.option(            '--clean', default=False,  is_flag=True)
@@ -64,18 +66,21 @@ def cli(ctx, seed, seeds, experiment, prompt, device, verbose, **kwargs):
         t2i._generator(device=device, **kwargs)
         print(f'{kwargs["generator"]}')
         #-----------------------------------------------------------------------
-        run = neptune.init()
+        run = neptune.init(project=experiment)
         run_id = run.get_url().split('/')[-1]
         #-----------------------------------------------------------------------
         for key,val in kwargs.items(): run[f'params/{key}'] = val
         config = config_prompt(prompt=prompt, seed=seed, step=kwargs['save_progress'])
+        for key,val in config.items(): run[f'prompt/{key}'] = val
+
         output_files = t2i.run(config, seeds=seeds, **kwargs)
+        for output_file in output_files: run['images'].log(File(output_file))
         #-----------------------------------------------------------------------
         del t2i
         gc.collect()
         th.cuda.empty_cache()
         #-----------------------------------------------------------------------
-        if kwargs['isr'] is not None: ctx.invoke(isr, image=output_files)
+        if kwargs['isr'] is not None: ctx.invoke(isr.run, image=output_files)
 
     return output_files
 

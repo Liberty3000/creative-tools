@@ -58,7 +58,7 @@ type=str)
 @click.option(     '--save_every', default=10)
 @click.option(  '--save_progress', default=False,  is_flag=True)
 @click.option(        '--preview', default=False,  is_flag=True)
-@click.option(            '--isr', default=None, type=click.Choice([None, '2x', '4x', '8x']))
+@click.option(            '--isr', default=None, type=click.Choice([None,2,4,8]))
 # animation transformations
 @click.option(          '--swirl', default=False,  is_flag=True)
 @click.option(          '--depth', default=False,  is_flag=True)
