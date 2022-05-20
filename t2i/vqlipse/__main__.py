@@ -29,7 +29,7 @@ from t2i.util import enforce_reproducibility
 # training duration
 @click.option(            '--stages', default=\
 '{"0":{"perceptor":["ViT-B/32","ViT-B/16","RN50"], "p_weights":[1.0,1.0,1.0],\
-  "cutn":64, "cutp":0.50, "steps":150,  "init_weight":0.0, "lr":0.10, "image_w":320, "image_h":240},\
+  "cutn":64, "cutp":0.50, "steps":150,  "lr":0.10, "image_w":320, "image_h":240},\
   "1":{"perceptor":["ViT-B/32","ViT-B/16","RN50"], "p_weights":[1.0,1.0,1.0],\
   "cutn":32, "cutp":1.00, "steps":150,  "init_weight":2.0, "lr":0.01, "image_w":640, "image_h":480},\
   "2":{"perceptor":["ViT-B/32","ViT-B/16","RN50"], "p_weights":[1.0,1.0,1.0], "aug":false, "tv_loss":1.0,\
