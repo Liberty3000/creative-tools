@@ -1,0 +1,13 @@
+click
+deep-translator
+glm
+gradio
+kornia
+more-itertools
+neptune-client
+Pillow
+torch
+torchvision
+tqdm
+transformers
+git+https://github.com/Liberty3000/neurpy
