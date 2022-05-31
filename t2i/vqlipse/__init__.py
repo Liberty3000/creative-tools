@@ -129,9 +129,9 @@ class VQLIPSE(T2I):
             vals = vals + ['', '1', '-inf'][len(vals):]
             text, weight, stop = vals[0], float(vals[1]), float(vals[2])
             for p,p_dict in self.P.items():
-                perceptor = p_dict['perceptor']
-                patch_size = p_dict['patch_size']
+                perceptor, patch_size = p_dict['perceptor'], p_dict['patch_size']
                 normalize, tokenize = p_dict['normalize'], p_dict['tokenize']
+                weight *= p_dict['weight']
 
                 if os.path.exists(text):
                     image_tensor = Image.open(text).resize(2 * (patch_size,))
@@ -150,8 +150,13 @@ class VQLIPSE(T2I):
         #-----------------------------------------------------------------------
         # todo: load `cutm` from module, vary cutouts per-perceptor, etc.
         patch_size = 2 * (list(self.P.values())[0]['patch_size'],)
-        self.make_cutouts = MakeCutouts_v2(patch_size, cutn=kwargs['cutn'],
-        cutp=kwargs['cutp'], aug_noise=kwargs['aug_noise'])
+        if kwargs['cutm'] == 'v2':
+            self.make_cutouts = MakeCutouts_v2(patch_size, cutn=kwargs['cutn'],
+            cutp=kwargs['cutp'], aug_noise=kwargs['aug_noise'])
+        if kwargs['cutm'] == 'v3':
+            self.make_cutouts = MakeCutouts_v3(cut_size=patch_size, cutn=kwargs['cutn'],
+            cut_pow=kwargs['cutp'], aug_noise=kwargs['aug_noise'])
+
         cutouts = self.make_cutouts(output, augment=kwargs['aug'])
         cutouts = clamp_with_grad(cutouts, 0, 1)
         #-----------------------------------------------------------------------

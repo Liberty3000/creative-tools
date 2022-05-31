@@ -26,19 +26,21 @@ def run(ctx, input, up, **args):
     model = load(args['model'], up=up, device=args['device'])[0]
 
     output_files = []
-    bar = tqdm.tqdm(files)
+    bar = tqdm.tqdm(files, total=len(files))
     for filename in bar:
-        output_f = f'{pathlib.Path(filename).stem}-x{up}.png'
+        try:
+            output_f = f'{pathlib.Path(filename).stem}-x{up}.png'
 
-        if os.path.isfile(output_f): continue
+            if os.path.isfile(output_f): continue
 
-        image = Image.open(filename).convert('RGB')
-        up_input = model.predict(image)
+            image = Image.open(filename).convert('RGB')
+            up_input = model.predict(image)
 
-        bar.set_description('{} -> {}'.format(filename, output_f))
-        output_file = os.path.join(args['folder'], output_f)
-        up_input.save(output_file)
-        output_files.append(output_file)
+            bar.set_description('{} -> {}'.format(filename[:4], output_f[:4]))
+            output_file = os.path.join(args['folder'], output_f)
+            up_input.save(output_file)
+            output_files.append(output_file)
+        except: pass
 
     return output_files
 

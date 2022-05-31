@@ -60,8 +60,6 @@ type=str)
 @click.option(        '--preview', default=False,  is_flag=True)
 @click.option(            '--isr', default=None, type=click.Choice([None,2,4,8]))
 # animation transformations
-@click.option(          '--swirl', default=False,  is_flag=True)
-@click.option(          '--depth', default=False,  is_flag=True)
 @click.option(      '--zoom_init', default=200,    type=int)
 @click.option(      '--zoom_step', default=10,     type=int)
 @click.option(        '--zoom_2d', default=False,  is_flag=True)
@@ -75,9 +73,9 @@ type=click.Choice(['bicubic','bilinear','nearest']))
 @click.option(  '--field_of_view', default=40,     type=int)
 @click.option(     '--near_plane', default=1,      type=int)
 @click.option(      '--far_plane', default=10_000, type=int)
-@click.option(    '--translate_x', default= '10')
-@click.option(    '--translate_y', default='-10')
-@click.option(    '--translate_z', default='75', help='only used if `animate` == `3D`.')
+@click.option(    '--translate_x', default= '-10 * cos(t)')
+@click.option(    '--translate_y', default= '10 * sin(t)')
+@click.option(    '--translate_z', default= '75', help='only used if `animate` == `3D`.')
 @click.option(      '--rotate_3d', default='[1,0,0,.01]',\
 help='must be a [w,x,y,z] rotation (unit) quaternion. use `--rotate_3d=[1,0,0,0]` for no rotation.')
 @click.option(      '--stabilize', default=False)
@@ -130,11 +128,13 @@ def cli(ctx, seed, seeds, experiment, prompt, init, device, video, **kwargs):
             #-------------------------------------------------------------------
             run = neptune.init(project=experiment)
             run_id = run.get_url().split('/')[-1]
+            run['seed'] = seed
             #-------------------------------------------------------------------
             outputs = []
             for i,args in enumerate(refinement(**args)):
                 for key,val in args.items(): run[f'params/stage_{i+1}/{key}'] = val
                 config = config_prompt(prompt=prompt, seed=seed, step=args['save_progress'])
+                for key,val in config.items(): run[f'prompt/{key}'] = val
                 #---------------------------------------------------------------
                 vqlipse._generator(device=device, **args)
                 vqlipse._perceptor(device=device, **args)
