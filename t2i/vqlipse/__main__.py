@@ -10,22 +10,22 @@ from t2i.util import enforce_reproducibility
 @click.option(             '--seeds', default=None,  type=int)
 @click.option(        '--experiment', default='liberty3000/VQLIPSE')
 @click.option(           '--verbose', default=False, is_flag=True)
-# input specification
+#-------------------------------------------------------------------------------
 @click.option(            '--prompt', default=None, type=str)
-# output resolution
+#-------------------------------------------------------------------------------
 @click.option(     '--image_w', '-w', default=320, type=int)
 @click.option(     '--image_h', '-h', default=240, type=int)
-# model architectures
+#-------------------------------------------------------------------------------
 @click.option(         '--generator', default='vqgan_imagenet_f16_16384')
-@click.option(         '--perceptor', default=["ViT-B/32","ViT-B/16"], multiple=True)
+@click.option(         '--perceptor', default=['ViT-B/32', 'ViT-B/16'], multiple=True)
 @click.option(         '--p_weights', default=[1.,1.], multiple=True)
-# latent initialization
+#-------------------------------------------------------------------------------
 @click.option(              '--init', default=None, type=str)
 @click.option(       '--init_weight', default=None, type=float)
-# loss functions
+#-------------------------------------------------------------------------------
 @click.option(           '--tv_loss', default=0.,   type=float)
 @click.option(         '--ssim_loss', default=0.,   type=float)
-# training duration
+#-------------------------------------------------------------------------------
 @click.option(            '--stages', default=\
 '{"0":{"perceptor":["ViT-B/32","ViT-B/16"],\
   "cutn": 64, "cutp":0.5, "steps":300, "lr":0.10, "image_w":256, "image_h":256},\
@@ -33,10 +33,10 @@ from t2i.util import enforce_reproducibility
   "cutn": 48, "cutp":2.0, "steps":200, "lr":0.01, "image_w":512, "image_h":512},\
   "2":{"perceptor":["ViT-B/32","ViT-B/16"],\
   "cutn": 32, "cutp":1.0, "steps":100, "lr":0.01, "image_w":768, "image_h":768}}'
-,type=str)
+, type=str)
 @click.option(         '--epochs', default=1,      type=int)
 @click.option(          '--steps', default=500,    type=int)
-# optimization parameters
+#-------------------------------------------------------------------------------
 @click.option(      '--optimizer', default='AdamW',type=str)
 @click.option(             '--lr', default=1e-1,   type=float)
 @click.option(      '--scheduler', default=None,   type=str)
@@ -44,21 +44,21 @@ from t2i.util import enforce_reproducibility
 @click.option(      '--ema_decay', default=None,   type=float)
 @click.option('--grad_accumulate', default=1,      type=int)
 @click.option(   '--cutn_batches', default=1,      type=int)
-# image subsampling
+#-------------------------------------------------------------------------------
 @click.option(           '--cutm', default='v2',   type=str)
 @click.option(           '--cutn', default=2**5,   type=int)
 @click.option(           '--cutp', default=0.50,   type=float)
-# data augmentation
+#-------------------------------------------------------------------------------
 @click.option(            '--aug', default=True,   type=bool)
 @click.option(      '--aug_noise', default=0.1,    type=float)
-# output specification
+#-------------------------------------------------------------------------------
 @click.option(         '--folder', default=None)
 @click.option(         '--bundle', default=False,  is_flag=True)
 @click.option(     '--save_every', default=10)
 @click.option(  '--save_progress', default=False,  is_flag=True)
 @click.option(        '--preview', default=False,  is_flag=True)
 @click.option(            '--isr', default=None, type=click.Choice([None,2,4,8]))
-# animation transformations
+#-------------------------------------------------------------------------------
 @click.option(      '--zoom_init', default=200,    type=int)
 @click.option(      '--zoom_step', default=10,     type=int)
 @click.option(        '--zoom_2d', default=False,  is_flag=True)
@@ -78,11 +78,11 @@ type=click.Choice(['bicubic','bilinear','nearest']))
 @click.option(      '--rotate_3d', default='[1,0,0,.01]',\
 help='must be a [w,x,y,z] rotation (unit) quaternion. use `--rotate_3d=[1,0,0,0]` for no rotation.')
 @click.option(      '--stabilize', default=False)
-# video compilation
+#-------------------------------------------------------------------------------
 @click.option(          '--video', default=False,  is_flag=True)
 @click.option(            '--fps', default=30,     type=int)
 @click.option(          '--clean', default=False,  is_flag=True)
-# device strategy
+#-------------------------------------------------------------------------------
 @click.option(         '--device', default='cuda:0')
 @click.command()
 @click.pass_context
