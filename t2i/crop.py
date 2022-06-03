@@ -164,7 +164,7 @@ class MakeCutouts_v2(th.nn.Module):
 
 
 class MakeCutouts_v3(th.nn.Module):
-    def __init__(self, cut_size, cutn, cut_pow=1., cutn_whole_portion = 0.0, cutn_bw_portion = 0.2):
+    def __init__(self, cut_size, cutn, cut_pow=1., cutn_whole_portion = 0.0, cutn_bw_portion = 0.2, aug_noise=0.):
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
@@ -184,10 +184,10 @@ class MakeCutouts_v3(th.nn.Module):
         RandomNoise(noise=aug_noise),
         )
 
-    def forward(self, input):
+    def forward(self, input, augment=True):
         sideY, sideX = input.shape[2:4]
         max_size = min(sideX, sideY)
-        min_size = min(sideX, sideY, self.cut_size)
+        min_size = min(sideX, sideY, self.cut_size[0])
         cutouts = []
         if self.cutn==1:
             cutouts.append(th.nn.functional.adaptive_avg_pool2d(input, self.cut_size))

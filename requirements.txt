@@ -1,13 +1,19 @@
-click
+--find-links https://download.pytorch.org/whl/torch_stable.html
+
 deep-translator
+einops
+git+https://github.com/Liberty3000/neurpy.git
+git+https://github.com/openai/CLIP.git
+git+https://github.com/crowsonkb/guided-diffusion
 glm
 gradio
 kornia
+lpips
 more-itertools
 neptune-client
-Pillow
-torch
-torchvision
+numpy
+scipy
+torch==1.10.0+cu113
+torchmetrics==0.6.0
+torchvision==0.11.1+cu113
 tqdm
-transformers
-git+https://github.com/Liberty3000/neurpy

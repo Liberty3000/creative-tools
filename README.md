@@ -50,3 +50,14 @@ python -m t2i.rudalle  --prompt=$PROMPT
 ```
 
 <img src="examples/rudalle-grid.png" alt="ruDALL-E" />
+
+
+##### Latent Diffusion
+
+Diffusion-based image synthesis with [Latent Diffusion](https://github.com/CompVis/latent-diffusion).
+
+```bash
+python -m t2i.latent_diffusion --prompt=$PROMPT
+```
+
+<img src="examples/latent-diffusion-grid.png" alt="Latent Diffusion" />

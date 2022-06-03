@@ -68,6 +68,7 @@ def cli(ctx, seed, seeds, experiment, prompt, device, verbose, **kwargs):
         #-----------------------------------------------------------------------
         run = neptune.init(project=experiment)
         run_id = run.get_url().split('/')[-1]
+        run['seed'] = seed
         #-----------------------------------------------------------------------
         for key,val in kwargs.items(): run[f'params/{key}'] = val
         config = config_prompt(prompt=prompt, seed=seed, step=kwargs['save_progress'])
@@ -80,7 +81,7 @@ def cli(ctx, seed, seeds, experiment, prompt, device, verbose, **kwargs):
         gc.collect()
         th.cuda.empty_cache()
         #-----------------------------------------------------------------------
-        if kwargs['isr'] is not None: ctx.invoke(isr.run, image=output_files)
+        if kwargs['isr'] is not None: ctx.invoke(isr.run, input=output_files)
 
     return output_files
 

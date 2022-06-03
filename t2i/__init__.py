@@ -12,6 +12,7 @@ def config_prompt(prompt, seed=None, step=False, max_chars=255):
     prompts = prompt.split('||')
     if len(prompts) > 1:
         prompt = '{}...{}'.format(prompts[0][:32], prompts[-1][-32:])
+    prompt = prompt [:246]
     #---------------------------------------------------------------------------
     filtered = prompt.rstrip()
     for char in [' ', '-', ',']: filtered = filtered.replace(char, '_')
@@ -61,6 +62,9 @@ class T2I(th.nn.Module):
         return dict(G=self.G)
 
     def _perceptor(self, device='cuda', **kwargs):
+        if len(kwargs['p_weights']) != len(kwargs['perceptor']):
+            kwargs['p_weights'] = [1] * len(kwargs['perceptor'])
+
         for perceptor,weight in zip(kwargs['perceptor'], kwargs['p_weights']):
             if not perceptor in self.P.keys():
                 model, normalize, tokenize = load(perceptor)
