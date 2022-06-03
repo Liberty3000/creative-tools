@@ -4,9 +4,11 @@ deep-translator
 einops
 git+https://github.com/Liberty3000/neurpy.git
 git+https://github.com/openai/CLIP.git
+git+https://github.com/crowsonkb/guided-diffusion
 glm
 gradio
 kornia
+lpips
 more-itertools
 neptune-client
 numpy

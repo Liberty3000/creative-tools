@@ -12,14 +12,14 @@ from neurpy.model.pretrained import load
 @click.pass_context
 def run(ctx, input, up, **args):
 
-    if os.path.isdir(input):
+    if isinstance(input, list):
+        files = input
+    elif os.path.isdir(input):
         files = glob.glob(os.path.join(input, '*.png'))
     elif '*' in input:
         files = glob.glob(input)
     elif os.path.isfile(input):
         files = [input]
-    elif isinstance(input, list):
-        files = input
     else:
         raise Exception(f'invalid input `{args["input"]}`.')
 

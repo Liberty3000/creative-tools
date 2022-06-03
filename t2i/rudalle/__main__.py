@@ -81,7 +81,7 @@ def cli(ctx, seed, seeds, experiment, prompt, device, verbose, **kwargs):
         gc.collect()
         th.cuda.empty_cache()
         #-----------------------------------------------------------------------
-        if kwargs['isr'] is not None: ctx.invoke(isr.run, image=output_files)
+        if kwargs['isr'] is not None: ctx.invoke(isr.run, input=output_files)
 
     return output_files
 

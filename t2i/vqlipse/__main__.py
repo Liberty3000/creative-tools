@@ -1,7 +1,6 @@
 import click, gc, os, random, pprint, yaml
 import neptune.new as neptune
 import torch as th
-from t2i import animate, config_prompt
 from t2i import animate, config_prompt, isr
 from t2i.vqlipse import VQLIPSE, refinement
 from t2i.util import enforce_reproducibility
@@ -18,25 +17,25 @@ from t2i.util import enforce_reproducibility
 @click.option(     '--image_h', '-h', default=240, type=int)
 # model architectures
 @click.option(         '--generator', default='vqgan_imagenet_f16_16384')
-@click.option(         '--perceptor', default=['ViT-B/32'], multiple=True)
-@click.option(         '--p_weights', default=[1.], multiple=True)
+@click.option(         '--perceptor', default=["ViT-B/32","ViT-B/16"], multiple=True)
+@click.option(         '--p_weights', default=[1.,1.], multiple=True)
 # latent initialization
-@click.option(              '--init', default=None,  type=str)
-@click.option(       '--init_weight', default=None,  type=float)
+@click.option(              '--init', default=None, type=str)
+@click.option(       '--init_weight', default=None, type=float)
 # loss functions
-@click.option(           '--tv_loss', default=0.,    type=float)
-@click.option(         '--ssim_loss', default=0.,    type=float)
+@click.option(           '--tv_loss', default=0.,   type=float)
+@click.option(         '--ssim_loss', default=0.,   type=float)
 # training duration
 @click.option(            '--stages', default=\
-'{"0":{"perceptor":["ViT-B/32","ViT-B/16","RN50"], "p_weights":[1.0,1.0,1.0],\
-  "cutn":64, "cutp":0.50, "steps":150,  "init_weight":0.0, "lr":0.10, "image_w":320, "image_h":240},\
-  "1":{"perceptor":["ViT-B/32","ViT-B/16","RN50"], "p_weights":[1.0,1.0,1.0],\
-  "cutn":32, "cutp":1.00, "steps":150,  "init_weight":2.0, "lr":0.01, "image_w":640, "image_h":480},\
-  "2":{"perceptor":["ViT-B/32","ViT-B/16","RN50"], "p_weights":[1.0,1.0,1.0], "aug":false, "tv_loss":1.0,\
-  "cutn":16, "cutp":2.00, "steps":150, "init_weight": 4.0, "lr":0.01, "image_w":1024,"image_h":768}}',\
-type=str)
+'{"0":{"perceptor":["ViT-B/32","ViT-B/16"],\
+  "cutn": 64, "cutp":0.5, "steps":300, "lr":0.10, "image_w":256, "image_h":256},\
+  "1":{"perceptor":["ViT-B/32","ViT-B/16"],\
+  "cutn": 48, "cutp":2.0, "steps":200, "lr":0.01, "image_w":512, "image_h":512},\
+  "2":{"perceptor":["ViT-B/32","ViT-B/16"],\
+  "cutn": 32, "cutp":1.0, "steps":100, "lr":0.01, "image_w":768, "image_h":768}}'
+,type=str)
 @click.option(         '--epochs', default=1,      type=int)
-@click.option(          '--steps', default=200,    type=int)
+@click.option(          '--steps', default=500,    type=int)
 # optimization parameters
 @click.option(      '--optimizer', default='AdamW',type=str)
 @click.option(             '--lr', default=1e-1,   type=float)
@@ -107,6 +106,10 @@ def cli(ctx, seed, seeds, experiment, prompt, init, device, video, **kwargs):
             if init == 'bigsleep':
                 from t2i.bigsleep.__main__ import cli
                 output_files = ctx.invoke(cli, seed=seed, prompt=prompt, steps=250)
+                init = output_files[-1]
+            if init =='latent_diffusion':
+                from t2i.latent_diffusion.__main__ import cli
+                output_files = ctx.invoke(cli, seed=seed, prompt=prompt, batch_size=1)
                 init = output_files[-1]
             elif init == 'rudalle':
                 from t2i.rudalle.__main__ import cli
