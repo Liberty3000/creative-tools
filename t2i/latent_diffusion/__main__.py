@@ -31,6 +31,7 @@ from t2i.util import enforce_reproducibility
 @click.option(   '--save_every', default=10)
 @click.option('--save_progress', default=False,  is_flag=True)
 @click.option(      '--preview', default=False,  is_flag=True)
+@click.option('--refine_prompt', default=False,  is_flag=True)
 @click.option(       '--refine', default=\
 '{"stages":null, "image_w":768, "image_h":768, "lr":0.01, "steps":100, "cutn":32, "tv_loss":1.0, \
   "cutp":1.0, "cutn_batches":4, "init_weight":5.0, "aug":false, "perceptor": ["ViT-B/32", "RN50x4"]}',
@@ -83,7 +84,7 @@ def cli(ctx, seed, seeds, experiment, prompt, device, verbose, **kwargs):
     if kwargs['refine'] is not None:
         from t2i.vqlipse.__main__ import cli
         for prompt, output_file in zip(output_prompts, output_files):
-            prompt += f'|{output_file}'
+            if kwargs['refine_prompt']: prompt += f'|{output_file}'
             args = json.loads(kwargs['refine'])
             ctx.invoke(cli, prompt=prompt, init=output_file, **args)
     #---------------------------------------------------------------------------

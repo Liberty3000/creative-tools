@@ -1,7 +1,8 @@
-import uuid, tqdm
+import os, pathlib, uuid, tqdm
 import torch as th
 import torchvision.transforms as T
 from torchvision.utils import save_image
+from neurpy.module.ema import EMA
 from neurpy.model.pretrained import load
 
 
@@ -9,14 +10,17 @@ def config_prompt(prompt, seed=None, step=False, max_chars=255):
     conf = dict(id=str(uuid.uuid4())[:8], prompt=prompt, seed=seed,
     formatter='{prompt}.{seed}.{id}.{step}.png', tokens=[])
     #---------------------------------------------------------------------------
-    prompts = prompt.split('||')
-    if len(prompts) > 1:
-        prompt = '{}...{}'.format(prompts[0][:32], prompts[-1][-32:])
-    prompt = prompt [:246]
-    #---------------------------------------------------------------------------
-    filtered = prompt.rstrip()
-    for char in [' ', '-', ',']: filtered = filtered.replace(char, '_')
-    for p in filtered.split('_'): conf['tokens'].append(p)
+    base = []
+    for scene in prompt.split('||'):
+        for prompt in scene.split('|'):
+            filtered = prompt.rstrip()
+            if os.path.isfile(filtered):
+                filtered = pathlib.Path(filtered).stem
+            else:
+                for char in [' ', '-', ',']: filtered = filtered.replace(char, '_')
+                for token in filtered.split('_'): conf['tokens'].append(token)
+            base.append(filtered)
+    prompt = '++'.join(base)
     #---------------------------------------------------------------------------
     filtered = filtered[:max_chars]
     seeded = f'{filtered}.{str(seed).zfill(6)}.{conf["id"]}'
@@ -32,7 +36,9 @@ def config_prompt(prompt, seed=None, step=False, max_chars=255):
                  latent='.pt')
     #---------------------------------------------------------------------------
     extension = map(lambda ext:f'{seeded}{ext}', files.values())
-    return dict(**conf, **dict(zip(files.keys(), extension)))
+    config = dict(**conf, **dict(zip(files.keys(), extension)))
+
+    return config
 
 
 class T2I(th.nn.Module):
@@ -42,7 +48,8 @@ class T2I(th.nn.Module):
     def init_z(self, **kwargs):
         raise NotImplementedError
 
-    def get_z(self):
+    def get_z(self, which='tensor'):
+        if hasattr(self.z, which): return getattr(self.z, which)
         return self.z
 
     def set_z(self, z):
@@ -76,15 +83,21 @@ class T2I(th.nn.Module):
                 tokenize=tokenize, prompts=[])
             self.P[perceptor]['weight'] = weight
             self.P[perceptor]['prompts'] = []
+            self.P[perceptor]['weights'] = []
+            self.P[perceptor]['target_embeds'] = []
     #---------------------------------------------------------------------------
 
     def optimizer(self, z, lr, weight_decay=0., ema_decay=None, optimizer='Adam', **kwargs):
-        self.z = z
-        self.z_init = self.z.clone()
-        self.z.requires_grad_(True)
-        if ema_decay is not None: self.z = EMA(self.z, ema_decay)
         Opt = getattr(th.optim, optimizer)
-        self.optim = Opt([self.z], lr=lr, weight_decay=weight_decay)
+        self.z = z
+        self.z.requires_grad_(True)
+        if ema_decay is not None:
+            self.z = EMA(self.z, ema_decay)
+            self.z_init = self.z.tensor.clone()
+            self.optim = Opt(self.z.parameters(), lr=lr, weight_decay=weight_decay)
+        else:
+            self.z_init = self.z.clone()
+            self.optim = Opt([self.z], lr=lr, weight_decay=weight_decay)
 
 
     def generate(self, z):
@@ -106,6 +119,7 @@ class T2I(th.nn.Module):
                 total_loss += loss.item()
                 loss.backward()
             self.optim.step()
+            if kwargs['ema_decay'] is not None: self.z.update()
         total_loss /= (cutn_batch * gradient_accumulate)
         return dict(**outputs, loss=loss.item(), total_loss=total_loss)
 

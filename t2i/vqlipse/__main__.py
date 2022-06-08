@@ -107,7 +107,11 @@ def cli(ctx, seed, seeds, experiment, prompt, init, device, video, **kwargs):
                 from t2i.bigsleep.__main__ import cli
                 output_files = ctx.invoke(cli, seed=seed, prompt=prompt, steps=250)
                 init = output_files[-1]
-            if init =='latent_diffusion':
+            elif init =='guided_diffusion':
+                from t2i.guided_diffusion.__main__ import cli
+                output_files = ctx.invoke(cli, seed=seed, prompt=prompt, batch_size=1)
+                init = output_files[-1]
+            elif init =='latent_diffusion':
                 from t2i.latent_diffusion.__main__ import cli
                 output_files = ctx.invoke(cli, seed=seed, prompt=prompt, batch_size=1)
                 init = output_files[-1]
