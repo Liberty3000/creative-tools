@@ -1,5 +1,6 @@
 --find-links https://download.pytorch.org/whl/torch_stable.html
 
+dalle2-pytorch
 deep-translator
 einops
 git+https://github.com/Liberty3000/neurpy.git
@@ -8,6 +9,7 @@ git+https://github.com/crowsonkb/guided-diffusion
 glm
 gradio
 kornia
+imagen-pytorch
 lpips
 more-itertools
 neptune-client

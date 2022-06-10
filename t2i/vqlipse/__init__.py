@@ -7,7 +7,7 @@ from torchvision.utils import save_image
 from torchmetrics import SSIM
 
 from neurpy.grad import clamp_with_grad, replace_grad
-from neurpy.loss import total_variation_loss
+from neurpy.loss import l1_loss, total_variation_loss
 from neurpy.model.pretrained import load
 from neurpy.noise import random_perlin, random_pyramid
 from neurpy.util import enforce_reproducibility
@@ -146,7 +146,7 @@ class VQLIPSE(T2I):
 
 
     def forward(self, **kwargs):
-        output, losses = self.generate(self.z), []
+        output, losses = self.generate(self.get_z('average')), []
         #-----------------------------------------------------------------------
         # todo: load `cutm` from module, vary cutouts per-perceptor, etc.
         patch_size = 2 * (list(self.P.values())[0]['patch_size'],)
@@ -156,6 +156,8 @@ class VQLIPSE(T2I):
         if kwargs['cutm'] == 'v3':
             self.make_cutouts = MakeCutouts_v3(cut_size=patch_size, cutn=kwargs['cutn'],
             cut_pow=kwargs['cutp'], aug_noise=kwargs['aug_noise'])
+        if kwargs['cutm'] == 'v4':
+            self.make_cutouts = MakeCutouts_v4(cut_size=patch_size, cutn=kwargs['cutn'])
 
         cutouts = self.make_cutouts(output, augment=kwargs['aug'])
         cutouts = clamp_with_grad(cutouts, 0, 1)
@@ -171,7 +173,11 @@ class VQLIPSE(T2I):
                 losses.append(prompt(encoding))
                 p_losses[f'{k}-prompts[{i}]'] = losses[-1]
         #-----------------------------------------------------------------------
-        tv_loss, ssim_loss, init_loss = 0.,0.,0.
+        l1_loss_, tv_loss, ssim_loss, init_loss = 0.,0.,0.,0.
+        if 'l1_loss' in kwargs.keys() and kwargs['l1_loss']:
+            l1_loss_ = kwargs['l1_loss'] * l1_loss(output)
+            losses.append(l1_loss_)
+
         if 'tv_loss' in kwargs.keys() and kwargs['tv_loss']:
             tv_loss = kwargs['tv_loss'] * total_variation_loss(output)
             losses.append(tv_loss)
@@ -183,7 +189,7 @@ class VQLIPSE(T2I):
             losses.append(kwargs['ssim_loss'] * ssim_loss)
 
         if 'init_weight' in kwargs.keys() and kwargs['init_weight']:
-            init_loss = F.mse_loss(self.z, self.z_init) * kwargs['init_weight'] / 2
+            init_loss = F.mse_loss(self.get_z(), self.z_init) * kwargs['init_weight'] / 2
             losses.append(init_loss)
         #-----------------------------------------------------------------------
         return dict(image=output, losses=losses, prompt_losses=p_losses)
@@ -199,7 +205,8 @@ class VQLIPSE(T2I):
                 loss.backward()
 
             with th.no_grad():
-                self.z.copy_(self.z.maximum(self.z_min).minimum(self.z_max))
+                z = self.get_z()
+                self.set_z(z.copy_(z.maximum(self.z_min).minimum(self.z_max)))
 
             self.optim.step()
             self.optim.zero_grad(set_to_none=True)
@@ -233,5 +240,4 @@ class VQLIPSE(T2I):
             self.optimizer(self.init_z(init='zoom.png', **kwargs), **kwargs)
             output_dict['animated'] = T.ToTensor()(pil_image)
 
-        #-----------------------------------------------------------------------
         return output_dict

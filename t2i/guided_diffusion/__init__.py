@@ -9,15 +9,6 @@ from neurpy.loss import *
 from t2i import T2I
 from t2i.crop import *
 
-def parse_prompt(prompt):
-    if prompt.startswith('http://') or prompt.startswith('https://'):
-        vals = prompt.rsplit(':', 2)
-        vals = [vals[0] + ':' + vals[1], *vals[2:]]
-    else:
-        vals = prompt.rsplit(':', 1)
-    vals = vals + ['', '1'][len(vals):]
-    return vals[0], float(vals[1])
-
 
 class GuidedDiffusion(T2I):
     def __init__(self, **kwargs):
@@ -25,10 +16,10 @@ class GuidedDiffusion(T2I):
         self.model, self.diffusion = None, None
         self.P = dict()
 
-    def _generator(self, generator, *args, **kwargs):
-        self.model, self.model_config, self.diffusion = load(generator, **kwargs)
+    def _generator(self, generator, device='cuda:0', *args, **kwargs):
+        self.model, self.model_config, self.diffusion = load(generator, device=device, **kwargs)
         self.side_x = self.side_y = self.model_config['image_size']
-        self.lpips_model = lpips_model = lpips.LPIPS(net=kwargs['lpips_model']).to(kwargs['device'])
+        self.lpips_model = lpips_model = lpips.LPIPS(net=kwargs['lpips_model']).to(device)
         if self.model_config['timestep_respacing'].startswith('ddim'):
             self.sample_fn = self.diffusion.ddim_sample_loop_progressive
         else:
@@ -53,32 +44,37 @@ class GuidedDiffusion(T2I):
                 make_cutouts=MakeCutouts_v4(patch_size, kwargs['cutn'], aug=kwargs['aug']))
 
 
-    def encode_prompts(self, prompt_config, device='cuda:0', **kwargs):
+    def encode_prompts(self, prompt_config, fuzz_steps=25, device='cuda:0', **kwargs):
         for clip_model,clip_params in self.P.items():
             perceptor = clip_params['perceptor']
             for prompt in prompt_config['prompt'].split('|'):
 
                 if '.png' in prompt or '.jpg' in prompt or '.jpeg' in prompt:
-                    path, weight = parse_prompt(prompt)
+                    vals = prompt.rsplit(':', 2)
+                    vals = vals + ['', '1', '-inf'][len(vals):]
+                    path, weight, stop = vals[0], float(vals[1]), float(vals[2])
+
                     img = Image.open(path).convert('RGB')
-                    rsz = TF.resize(img, min(side_x, side_y, *img.size), T.InterpolationMode.LANCZOS)
+                    rsz = TF.resize(img, min(self.side_x, self.side_y, *img.size), T.InterpolationMode.LANCZOS)
                     ten = TF.to_tensor(rsz).to(device).unsqueeze(0).mul(2).sub(1)
                     batch = clip_params['make_cutouts'](ten)
                     norms = clip_params['normalize'](batch)
                     embed = perceptor.encode_image(norms).float()
-                    if lwargs['fuzzy_prompt']:
-                        for i in range(25):
+                    if kwargs['fuzzy_prompt']:
+                        for i in range(fuzz_steps):
                             noise = (embed + th.randn(embed.shape).to(device) * kwargs['rand_mag']).clamp(0,1)
                             clip_params['target_embeds'].append(noise)
                             weights.extend([weight / kwargs['cutn']] * kwargs['cutn'])
                     self.P[clip_model]['target_embeds'].append(embed)
                     self.P[clip_model]['weights'].extend([weight / kwargs['cutn']] * kwargs['cutn'])
                 else:
-                    txt, weight = parse_prompt(prompt)
-                    txt = perceptor.encode_text(clip_params['tokenize'](prompt).to(device)).float()
+                    vals = prompt.rsplit(':', 2)
+                    vals = vals + ['', '1', '-inf'][len(vals):]
+                    text, weight, stop = vals[0], float(vals[1]), float(vals[2])
+                    txt = perceptor.encode_text(clip_params['tokenize'](text).to(device)).float()
 
                     if kwargs['fuzzy_prompt']:
-                        for i in range(25):
+                        for i in range(fuzz_steps):
                             noise= (txt + th.randn(txt.shape).cuda() * kwargs['rand_mag']).clamp(0,1)
                             self.P[clip_model]['target_embeds'].append(noise)
                             self.P[clip_model]['weights'].append(weight)
@@ -93,7 +89,7 @@ class GuidedDiffusion(T2I):
             self.P[clip_model]['weights'] /= self.P[clip_model]['weights'].sum().abs()
 
 
-    def init(self, init=None, perlin=True, perlin_mode=None, device='cuda', **kwargs):
+    def init(self, init=None, perlin=True, perlin_mode=None, device='cuda:0', **kwargs):
         if init and os.path.isfile(init):
             init = Image.open(init).convert('RGB')
             init = init.resize((self.side_x, self.side_y), Image.LANCZOS)
@@ -121,7 +117,7 @@ class GuidedDiffusion(T2I):
         init_image = None
         if kwargs['init'] is not None and os.path.isfile(kwargs['init']):
             init_image = kwargs['init']
-
+        #-----------------------------------------------------------------------
         self.encode_prompts(prompt_config, **kwargs)
         #-----------------------------------------------------------------------
         cur_t = None
@@ -167,18 +163,16 @@ class GuidedDiffusion(T2I):
 
             return grad
         #-----------------------------------------------------------------------
-        args = dict(model_kwargs={}, progress=True, cond_fn=cond_fn,
-        init_image=init_image, skip_timesteps=kwargs['skip_timesteps'],
-        randomize_class=kwargs['randomize_class'],
-        clip_denoised=kwargs['clip_denoised'])
+        sample_args = dict(model_kwargs={}, progress=True, cond_fn=cond_fn,
+        init_image=init, skip_timesteps=kwargs['skip_timesteps'],
+        randomize_class=kwargs['randomize_class'], clip_denoised=kwargs['clip_denoised'])
 
         if self.model_config['timestep_respacing'].startswith('ddim'):
-            args = dict(**args, eta=eta)
-
-        samples = self.sample_fn(self.model, self.input_shape, **args)
-        cur_t = self.diffusion.num_timesteps - kwargs['skip_timesteps'] - 1
+            sample_args = dict(**sample_args, eta=eta)
+        samples = self.sample_fn(self.model, self.input_shape, **sample_args)
         #-----------------------------------------------------------------------
-        bar = tqdm.tqdm(total=kwargs['steps'])
+        cur_t = self.diffusion.num_timesteps - kwargs['skip_timesteps'] - 1
+        bar = tqdm.tqdm(total=cur_t)
         for i, sample in enumerate(samples):
             cur_t -= 1
             for j, image in enumerate(sample['pred_xstart']):

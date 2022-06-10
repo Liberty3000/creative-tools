@@ -33,10 +33,10 @@ from t2i.util import enforce_reproducibility
 @click.option(      '--preview', default=False,  is_flag=True)
 @click.option('--refine_prompt', default=False,  is_flag=True)
 @click.option(       '--refine', default=\
-'{"stages":null, "image_w":768, "image_h":768, "lr":0.01, "steps":100, "cutn":32, "tv_loss":1.0, \
-  "cutp":1.0, "cutn_batches":4, "init_weight":5.0, "aug":false, "perceptor": ["ViT-B/32", "RN50x4"]}',
-type=str)
-@click.option(          '--isr', default=None,   type=click.Choice([None,'2','4','8']))
+'{"mode":"vqlipse", "stages":null, "image_w":768, "image_h":768, "lr":0.01, "steps":10, "ema_decay":0.985, \
+  "cutn":16, "cutn_batches":16, "tv_loss":10, "init_weight":2000.0, "perceptor": ["ViT-B/32", "ViT-B/16", "RN50", "RN50x4"]}',\
+  type=str)
+@click.option(          '--isr', default=2,   type=click.Choice([None,'2','4','8']))
 #-------------------------------------------------------------------------------
 @click.option(       '--device', default='cuda:0')
 @click.command()
@@ -59,7 +59,8 @@ def cli(ctx, seed, seeds, experiment, prompt, device, verbose, **kwargs):
         with open(prompt, 'r') as f:
             prompts = f.readlines()
     else: prompts = [prompt]
-    output_prompts = []
+    #---------------------------------------------------------------------------
+    outputs = []
     for prompt in prompts:
         print(f'`{prompt}` >> seed :: {seed} :: {experiment}')
         #-----------------------------------------------------------------------
@@ -72,20 +73,24 @@ def cli(ctx, seed, seeds, experiment, prompt, device, verbose, **kwargs):
         for key,val in config.items(): run[f'prompt/{key}'] = val
 
         output_files = t2i.run(config, seeds=seeds, **kwargs)
-        for _ in range(len(output_files)): output_prompts.append(prompt)
         for output_file in output_files: run['images'].log(File(output_file))
+        if kwargs['isr'] is not None:
+            output_files = ctx.invoke(isr.run, up=kwargs['isr'], input=output_files)
+        outputs += [(prompt,f) for f in output_files]
     #---------------------------------------------------------------------------
     del t2i
     gc.collect()
     th.cuda.empty_cache()
     #---------------------------------------------------------------------------
-    if kwargs['isr'] is not None:
-        ctx.invoke(isr.run, input=output_files)
     if kwargs['refine'] is not None:
-        from t2i.vqlipse.__main__ import cli
-        for prompt, output_file in zip(output_prompts, output_files):
-            if kwargs['refine_prompt']: prompt += f'|{output_file}'
-            args = json.loads(kwargs['refine'])
+        args = json.loads(kwargs['refine'])
+        mode = args.pop('mode')
+        if mode == 'guided_diffusion':
+            from t2i.guided_diffusion.__main__ import cli
+        if mode == 'vqlipse':
+            from t2i.vqlipse.__main__ import cli
+        for prompt, output_file in outputs:
+            prompt += f'|{output_file}'
             ctx.invoke(cli, prompt=prompt, init=output_file, **args)
     #---------------------------------------------------------------------------
     return output_files

@@ -20,6 +20,37 @@ pip install -e .
 
 An extensible command line utility for text-to-image creation, animation and enhancement.
 
+##### Latent Diffusion
+
+Diffusion-based image synthesis with [Latent Diffusion](https://github.com/CompVis/latent-diffusion).
+
+```bash
+python -m t2i.latent_diffusion --prompt=$PROMPT
+```
+
+<img src="examples/latent-diffusion-grid.png" alt="Latent Diffusion" />
+
+##### Guided Diffusion
+
+CLIP-guided image synthesis with [Diffusion Models](https://github.com/crowsonkb/guided-diffusion).
+
+```bash
+python -m t2i.guided_diffusion --prompt=$PROMPT
+```
+
+<img src="examples/guided-diffusion-grid.png" alt="Guided Diffusion" />
+
+
+##### ruDALL-E
+
+Autoregressive image synthesis with 🇷🇺 [DALL-E](https://github.com/ai-forever/ru-dalle).
+
+```bash
+python -m t2i.rudalle  --prompt=$PROMPT
+```
+
+<img src="examples/rudalle-grid.png" alt="ruDALL-E" />
+
 #### VQLIPSE
 
 CLIP-guided image synthesis with [VQGAN](https://github.com/CompVis/taming-transformers).
@@ -39,25 +70,3 @@ python -m t2i.bigsleep --prompt=$PROMPT
 ```
 
 <img src="examples/bigsleep-grid.png" alt="BigSleep" />
-
-
-##### ruDALL-E
-
-Autoregressive image synthesis with 🇷🇺 [DALL-E](https://github.com/ai-forever/ru-dalle).
-
-```bash
-python -m t2i.rudalle  --prompt=$PROMPT
-```
-
-<img src="examples/rudalle-grid.png" alt="ruDALL-E" />
-
-
-##### Latent Diffusion
-
-Diffusion-based image synthesis with [Latent Diffusion](https://github.com/CompVis/latent-diffusion).
-
-```bash
-python -m t2i.latent_diffusion --prompt=$PROMPT
-```
-
-<img src="examples/latent-diffusion-grid.png" alt="Latent Diffusion" />

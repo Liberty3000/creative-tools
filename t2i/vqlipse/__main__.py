@@ -23,6 +23,7 @@ from t2i.util import enforce_reproducibility
 @click.option(              '--init', default=None, type=str)
 @click.option(       '--init_weight', default=None, type=float)
 #-------------------------------------------------------------------------------
+@click.option(           '--l1_loss', default=0.,   type=float)
 @click.option(           '--tv_loss', default=0.,   type=float)
 @click.option(         '--ssim_loss', default=0.,   type=float)
 #-------------------------------------------------------------------------------
@@ -124,12 +125,13 @@ def cli(ctx, seed, seeds, experiment, prompt, init, device, video, **kwargs):
                                           seed=seed, prompt=prompt, batch_size=1)
                 init = output_files[-1]
                 prompt += f'| {init}'
-
+            #-------------------------------------------------------------------
             if init == 'perlin': args = dict(octaves=2**2, weight=22e-2, **kwargs)
             elif init == 'pyramid': args = dict(octaves=2**3,  decay=99e-2, **kwargs)
             else: args = kwargs
 
             _init = init
+            #-------------------------------------------------------------------
             #-------------------------------------------------------------------
             vqlipse = VQLIPSE(**args).to(device)
             #-------------------------------------------------------------------
@@ -139,9 +141,9 @@ def cli(ctx, seed, seeds, experiment, prompt, init, device, video, **kwargs):
             #-------------------------------------------------------------------
             outputs = []
             for i,args in enumerate(refinement(**args)):
-                for key,val in args.items(): run[f'params/stage_{i+1}/{key}'] = val
                 config = config_prompt(prompt=prompt, seed=seed, step=args['save_progress'])
                 for key,val in config.items(): run[f'prompt/{key}'] = val
+                for key,val in args.items(): run[f'params/stage_{i+1}/{key}'] = val
                 #---------------------------------------------------------------
                 vqlipse._generator(device=device, **args)
                 vqlipse._perceptor(device=device, **args)

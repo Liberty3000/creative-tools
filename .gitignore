@@ -1,0 +1,8 @@
+env/
+venv/
+.neptune
+*.egg-info
+*.ipynb
+*.mp4
+*.png
+*.pt

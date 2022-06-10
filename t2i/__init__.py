@@ -1,10 +1,30 @@
-import os, pathlib, uuid, tqdm
+import json, os, pathlib, uuid, tqdm, yaml
+
 import torch as th
 import torchvision.transforms as T
 from torchvision.utils import save_image
 from neurpy.module.ema import EMA
 from neurpy.model.pretrained import load
 
+
+def from_config(config, *args, **kwargs) -> dict:
+    import json, yaml
+    def is_json(myjson):
+      try:
+        json.loads(myjson)
+      except ValueError as e:
+        return False
+      return True
+    output = dict()
+    if os.path.isfile(config):
+        if config.endswith('.yaml'):
+            handler = lambda *args, **kwargs:json.safe_load(*args, **kwargs)
+        elif config.endswith('.json'):
+            handler = lambda *args, **kwargs:json.load(*args, **kwargs)
+        with open(config, 'r') as f:
+            output = handler(f)
+    elif is_json(config): output = json.loads(config)
+    return output
 
 def config_prompt(prompt, seed=None, step=False, max_chars=255):
     conf = dict(id=str(uuid.uuid4())[:8], prompt=prompt, seed=seed,
@@ -143,7 +163,7 @@ class T2I(th.nn.Module):
             self.encode_text(prompts[epoch], verbose=verbose)
 
             for step in itrs:
-                batch_nb = ((1 + epoch) * step)
+                batch_nb = ((1 + epoch) * (1 + step))
                 outputs = self.training_step(prompt=prompts[epoch], batch_nb=batch_nb, **kwargs)
 
                 if batch_nb and batch_nb % save_every == 0:
@@ -152,7 +172,8 @@ class T2I(th.nn.Module):
                     if save_progress:
                         save_n = str(batch_nb).zfill(6)
                         output_file = prompt_config['step'].format(save_n)
-                    else:  output_file = prompt_config['image']
+                    else:
+                        output_file = prompt_config['image']
                     output_files.append(output_file)
 
                     with th.no_grad():
